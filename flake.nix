@@ -71,7 +71,7 @@
 
             cmakeBuildType = "Release";
 
-            buildInputs = with pkgs; [
+            propagatedBuildInputs = with pkgs; [
               fmt
               reproc
               tl-expected
