@@ -45,7 +45,7 @@
               cmake-language-server
             ];
 
-            propagatedBuildInputs = with pkgs; [
+            buildInputs = with pkgs; [
               # dev
               gdb
               gcc14
