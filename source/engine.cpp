@@ -1,33 +1,36 @@
-#include "ucilib/engine.hpp"
-
-#include "detail/parser.hpp"
-
-#include <reproc++/drain.hpp>
-#include <reproc++/reproc.hpp>
-
-#include <fmt/core.h>
-
 #include <atomic>
 #include <future>
 #include <mutex>
 #include <string>
 #include <thread>
 
-namespace uci {
+#include "ucilib/engine.hpp"
 
-struct engine::impl {
+#include <fmt/core.h>
+#include <reproc++/drain.hpp>
+#include <reproc++/reproc.hpp>
+
+#include "detail/parser.hpp"
+
+namespace uci
+{
+
+struct engine::impl
+{
     reproc::process process;
     std::jthread reader_thread;
 
-    engine_id id_;                            // NOLINT(readability-identifier-naming)
-    std::vector<option_info> options_;          // NOLINT(readability-identifier-naming)
+    engine_id id_;  // NOLINT(readability-identifier-naming)
+    std::vector<option_info> options_;  // NOLINT(readability-identifier-naming)
 
-    info_callback on_info_;                     // NOLINT(readability-identifier-naming)
-    bestmove_callback on_bestmove_;             // NOLINT(readability-identifier-naming)
-    error_callback on_error_;                   // NOLINT(readability-identifier-naming)
+    info_callback on_info_;  // NOLINT(readability-identifier-naming)
+    bestmove_callback on_bestmove_;  // NOLINT(readability-identifier-naming)
+    error_callback on_error_;  // NOLINT(readability-identifier-naming)
 
-    std::atomic<bool> running_{false};          // NOLINT(readability-identifier-naming)
-    std::atomic<bool> in_search_{false};        // NOLINT(readability-identifier-naming)
+    std::atomic<bool> running_ {
+        false};  // NOLINT(readability-identifier-naming)
+    std::atomic<bool> in_search_ {
+        false};  // NOLINT(readability-identifier-naming)
 
     // Synchronization for blocking commands (uci, isready).
     std::mutex sync_mutex;
@@ -35,8 +38,8 @@ struct engine::impl {
     std::future<void> uciok_future;
     std::promise<void> readyok_promise;
     std::future<void> readyok_future;
-    bool waiting_uciok_{false};                 // NOLINT(readability-identifier-naming)
-    bool waiting_readyok_{false};               // NOLINT(readability-identifier-naming)
+    bool waiting_uciok_ {false};  // NOLINT(readability-identifier-naming)
+    bool waiting_readyok_ {false};  // NOLINT(readability-identifier-naming)
 
     // Line buffer for accumulating partial reads.
     std::string line_buffer;
@@ -52,8 +55,7 @@ struct engine::impl {
             reinterpret_cast<uint8_t const*>(msg.data()), msg.size());
 
         if (ec) {
-            return tl::unexpected(
-                std::error_code(ec.value(), ec.category()));
+            return tl::unexpected(std::error_code(ec.value(), ec.category()));
         }
         if (bytes != msg.size()) {
             return tl::unexpected(make_error_code(errc::write_failed));
@@ -99,7 +101,7 @@ struct engine::impl {
             if (on_info_) {
                 try {
                     on_info_(*parsed);
-                } catch (...) { // NOLINT(bugprone-empty-catch)
+                } catch (...) {  // NOLINT(bugprone-empty-catch)
                 }
             }
             return;
@@ -110,7 +112,7 @@ struct engine::impl {
             if (on_bestmove_) {
                 try {
                     on_bestmove_(*parsed);
-                } catch (...) { // NOLINT(bugprone-empty-catch)
+                } catch (...) {  // NOLINT(bugprone-empty-catch)
                 }
             }
             return;
@@ -135,22 +137,27 @@ struct engine::impl {
 
     void reader_loop()
     {
-        auto sink = [this](reproc::stream /*stream*/, uint8_t const* buffer,
-                           std::size_t size) -> std::error_code {
+        auto sink = [this](reproc::stream /*stream*/,
+                           uint8_t const* buffer,
+                           std::size_t size) -> std::error_code
+        {
             if (size > 0) {
-                line_buffer.append(reinterpret_cast<char const*>(buffer),
-                                   size);
+                line_buffer.append(reinterpret_cast<char const*>(buffer), size);
                 process_buffer();
             }
             return {};
         };
 
-        static_cast<void>(reproc::drain(process, sink, reproc::sink::null)); // NOLINT(bugprone-unused-return-value)
+        static_cast<void>(reproc::drain(
+            process,
+            sink,
+            reproc::sink::null));  // NOLINT(bugprone-unused-return-value)
         running_.store(false, std::memory_order_relaxed);
-        if (in_search_.exchange(false, std::memory_order_relaxed) && on_error_) {
+        if (in_search_.exchange(false, std::memory_order_relaxed) && on_error_)
+        {
             try {
                 on_error_(make_error_code(errc::engine_crashed));
-            } catch (...) { // NOLINT(bugprone-empty-catch)
+            } catch (...) {  // NOLINT(bugprone-empty-catch)
             }
         }
 
@@ -159,19 +166,17 @@ struct engine::impl {
         if (waiting_uciok_) {
             waiting_uciok_ = false;
             try {
-                uciok_promise.set_exception(
-                    std::make_exception_ptr(std::runtime_error(
-                        "engine exited before uciok")));
-            } catch (...) { // NOLINT(bugprone-empty-catch)
+                uciok_promise.set_exception(std::make_exception_ptr(
+                    std::runtime_error("engine exited before uciok")));
+            } catch (...) {  // NOLINT(bugprone-empty-catch)
             }
         }
         if (waiting_readyok_) {
             waiting_readyok_ = false;
             try {
-                readyok_promise.set_exception(
-                    std::make_exception_ptr(std::runtime_error(
-                        "engine exited before readyok")));
-            } catch (...) { // NOLINT(bugprone-empty-catch)
+                readyok_promise.set_exception(std::make_exception_ptr(
+                    std::runtime_error("engine exited before readyok")));
+            } catch (...) {  // NOLINT(bugprone-empty-catch)
             }
         }
     }
@@ -197,8 +202,7 @@ auto engine::start(std::string const& path)
     -> tl::expected<engine_id, std::error_code>
 {
     if (impl_->running_.load(std::memory_order_relaxed)) {
-        return tl::unexpected(
-            make_error_code(errc::invalid_argument));
+        return tl::unexpected(make_error_code(errc::invalid_argument));
     }
 
     // Reset state.
@@ -217,8 +221,7 @@ auto engine::start(std::string const& path)
     std::vector<std::string> args = {path};
     auto ec = impl_->process.start(args, opts);
     if (ec) {
-        return tl::unexpected(
-            std::error_code(ec.value(), ec.category()));
+        return tl::unexpected(std::error_code(ec.value(), ec.category()));
     }
 
     impl_->running_.store(true, std::memory_order_relaxed);
@@ -241,13 +244,11 @@ auto engine::start(std::string const& path)
     }
 
     // Wait for uciok with a 10s timeout.
-    auto status
-        = impl_->uciok_future.wait_for(std::chrono::seconds(10));
+    auto status = impl_->uciok_future.wait_for(std::chrono::seconds(10));
     if (status == std::future_status::timeout) {
         // Kill the engine — it didn't respond.
         static_cast<void>(quit());
-        return tl::unexpected(
-            make_error_code(errc::uci_handshake_timeout));
+        return tl::unexpected(make_error_code(errc::uci_handshake_timeout));
     }
 
     try {
@@ -331,8 +332,7 @@ auto engine::set_option(std::string_view name, std::string_view value)
     if (value.empty()) {
         return impl_->send(fmt::format("setoption name {}", name));
     }
-    return impl_->send(
-        fmt::format("setoption name {} value {}", name, value));
+    return impl_->send(fmt::format("setoption name {} value {}", name, value));
 }
 
 auto engine::set_position(std::string_view fen,
@@ -364,8 +364,7 @@ auto engine::set_position_startpos(std::vector<std::string> const& moves)
     return impl_->send(cmd);
 }
 
-auto engine::go(go_params const& params)
-    -> tl::expected<void, std::error_code>
+auto engine::go(go_params const& params) -> tl::expected<void, std::error_code>
 {
     std::string cmd = "go";
 
@@ -452,4 +451,4 @@ auto engine::running() const -> bool
     return impl_->running_.load(std::memory_order_relaxed);
 }
 
-} // namespace uci
+}  // namespace uci

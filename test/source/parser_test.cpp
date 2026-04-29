@@ -69,8 +69,8 @@ TEST_CASE("parse_info_line: string message", "[parser]")
 
 TEST_CASE("parse_info_line: currmove and currmovenumber", "[parser]")
 {
-    auto result
-        = parse_info_line("info depth 5 currmove e2e4 currmovenumber 1");
+    auto result =
+        parse_info_line("info depth 5 currmove e2e4 currmovenumber 1");
     REQUIRE(result.has_value());
     CHECK(result->depth == 5);
     REQUIRE(result->currmove.has_value());
@@ -117,8 +117,8 @@ TEST_CASE("parse_bestmove: rejects non-bestmove", "[parser]")
 
 TEST_CASE("parse_option: spin type", "[parser]")
 {
-    auto result = parse_option(
-        "option name Hash type spin default 16 min 1 max 1024");
+    auto result =
+        parse_option("option name Hash type spin default 16 min 1 max 1024");
     REQUIRE(result.has_value());
     CHECK(result->name == "Hash");
     CHECK(result->type == option_type::spin);
@@ -129,8 +129,8 @@ TEST_CASE("parse_option: spin type", "[parser]")
 
 TEST_CASE("parse_option: check type", "[parser]")
 {
-    auto result
-        = parse_option("option name UCI_Chess960 type check default false");
+    auto result =
+        parse_option("option name UCI_Chess960 type check default false");
     REQUIRE(result.has_value());
     CHECK(result->name == "UCI_Chess960");
     CHECK(result->type == option_type::check);
@@ -162,8 +162,8 @@ TEST_CASE("parse_option: button type", "[parser]")
 
 TEST_CASE("parse_option: string type", "[parser]")
 {
-    auto result
-        = parse_option("option name NalimovPath type string default <empty>");
+    auto result =
+        parse_option("option name NalimovPath type string default <empty>");
     REQUIRE(result.has_value());
     CHECK(result->name == "NalimovPath");
     CHECK(result->type == option_type::string);

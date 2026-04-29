@@ -1,7 +1,3 @@
-#include "ucilib/engine.hpp"
-
-#include <catch2/catch_test_macros.hpp>
-
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
@@ -9,7 +5,12 @@
 #include <thread>
 #include <vector>
 
-namespace {
+#include "ucilib/engine.hpp"
+
+#include <catch2/catch_test_macros.hpp>
+
+namespace
+{
 
 auto engine_path() -> std::string
 {
@@ -19,7 +20,7 @@ auto engine_path() -> std::string
     return "stockfish";
 }
 
-} // namespace
+}  // namespace
 
 TEST_CASE("engine start and quit", "[engine]")
 {
@@ -77,16 +78,18 @@ TEST_CASE("engine go with depth and callbacks", "[engine]")
     uci::engine eng;
     REQUIRE(eng.start(engine_path()).has_value());
 
-    std::atomic<int> info_count{0};
-    std::atomic<bool> got_bestmove{false};
+    std::atomic<int> info_count {0};
+    std::atomic<bool> got_bestmove {false};
     std::string bestmove_str;
 
     eng.on_info([&](uci::info const& /*info*/) { ++info_count; });
 
-    eng.on_bestmove([&](uci::best_move const& bm) {
-        bestmove_str = bm.move;
-        got_bestmove.store(true, std::memory_order_relaxed);
-    });
+    eng.on_bestmove(
+        [&](uci::best_move const& bm)
+        {
+            bestmove_str = bm.move;
+            got_bestmove.store(true, std::memory_order_relaxed);
+        });
 
     REQUIRE(eng.set_position_startpos().has_value());
     REQUIRE(eng.go({.depth = 5}).has_value());
@@ -116,9 +119,9 @@ TEST_CASE("engine set_position with fen", "[engine]")
         "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2");
     CHECK(result.has_value());
 
-    std::atomic<bool> got_bestmove{false};
-    eng.on_bestmove(
-        [&](uci::best_move const& /*bm*/) { got_bestmove.store(true); });
+    std::atomic<bool> got_bestmove {false};
+    eng.on_bestmove([&](uci::best_move const& /*bm*/)
+                    { got_bestmove.store(true); });
 
     REQUIRE(eng.go({.depth = 3}).has_value());
 
@@ -139,23 +142,25 @@ TEST_CASE("engine multipv", "[engine]")
     REQUIRE(eng.is_ready().has_value());
     REQUIRE(eng.set_position_startpos().has_value());
 
-    std::atomic<int> max_multipv{0};
-    eng.on_info([&](uci::info const& info) {
-        if (info.multipv.has_value()) {
-            int current = max_multipv.load(std::memory_order_relaxed);
-            while (*info.multipv > current) {
-                if (max_multipv.compare_exchange_weak(
-                        current, *info.multipv, std::memory_order_relaxed))
-                {
-                    break;
+    std::atomic<int> max_multipv {0};
+    eng.on_info(
+        [&](uci::info const& info)
+        {
+            if (info.multipv.has_value()) {
+                int current = max_multipv.load(std::memory_order_relaxed);
+                while (*info.multipv > current) {
+                    if (max_multipv.compare_exchange_weak(
+                            current, *info.multipv, std::memory_order_relaxed))
+                    {
+                        break;
+                    }
                 }
             }
-        }
-    });
+        });
 
-    std::atomic<bool> got_bestmove{false};
-    eng.on_bestmove(
-        [&](uci::best_move const& /*bm*/) { got_bestmove.store(true); });
+    std::atomic<bool> got_bestmove {false};
+    eng.on_bestmove([&](uci::best_move const& /*bm*/)
+                    { got_bestmove.store(true); });
 
     REQUIRE(eng.go({.depth = 5}).has_value());
 
@@ -206,9 +211,9 @@ TEST_CASE("engine stop", "[engine]")
     // Let it search briefly.
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-    std::atomic<bool> got_bestmove{false};
-    eng.on_bestmove(
-        [&](uci::best_move const& /*bm*/) { got_bestmove.store(true); });
+    std::atomic<bool> got_bestmove {false};
+    eng.on_bestmove([&](uci::best_move const& /*bm*/)
+                    { got_bestmove.store(true); });
 
     REQUIRE(eng.stop().has_value());
 
