@@ -17,7 +17,11 @@ include(Catch)
 
 # ---- Tests ----
 
-add_executable(ucilib_parser_test source/parser_test.cpp)
+add_executable(
+    ucilib_parser_test
+    source/parser_test.cpp
+    ../source/parser.cpp
+)
 target_link_libraries(
     ucilib_parser_test PRIVATE
     ucilib::ucilib
