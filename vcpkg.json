@@ -7,8 +7,7 @@
       "version>=": "11.0.2#1"
     },
     {
-      "name": "reproc",
-      "features": ["cpp"]
+      "name": "reproc"
     },
     {
       "name": "tl-expected"
