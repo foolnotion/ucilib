@@ -18,7 +18,7 @@ namespace uci
 struct engine::impl
 {
     reproc::process process;
-    std::jthread reader_thread;
+    std::thread reader_thread;
 
     engine_id id_;  // NOLINT(readability-identifier-naming)
     std::vector<option_info> options_;  // NOLINT(readability-identifier-naming)
@@ -235,7 +235,7 @@ auto engine::start(std::string const& path)
     }
 
     // Start reader thread before sending "uci".
-    impl_->reader_thread = std::jthread([this] { impl_->reader_loop(); });
+    impl_->reader_thread = std::thread([this] { impl_->reader_loop(); });
 
     // Send "uci" command.
     auto send_result = impl_->send("uci");
