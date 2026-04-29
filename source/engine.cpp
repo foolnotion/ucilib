@@ -189,8 +189,7 @@ engine::engine()
 
 engine::~engine() noexcept
 {
-    if (impl_ && impl_->running_.load(std::memory_order_relaxed)) {
-        // Best-effort quit.
+    if (impl_) {
         static_cast<void>(quit());
     }
 }
@@ -262,24 +261,23 @@ auto engine::start(std::string const& path)
 
 auto engine::quit() -> tl::expected<void, std::error_code>
 {
-    if (!impl_->running_.load(std::memory_order_relaxed)) {
-        return {};
+    if (impl_->running_.load(std::memory_order_relaxed)) {
+        // Best-effort send quit.
+        static_cast<void>(impl_->send("quit"));
+
+        // Stop the process with escalating signals.
+        impl_->process.stop({
+            {reproc::stop::wait, reproc::milliseconds(500)},
+            {reproc::stop::terminate, reproc::milliseconds(500)},
+            {reproc::stop::kill, reproc::milliseconds(500)},
+        });
+
+        impl_->running_.store(false, std::memory_order_relaxed);
     }
 
-    // Best-effort send quit.
-    static_cast<void>(impl_->send("quit"));
-
-    // Stop the process with escalating signals.
-    impl_->process.stop({
-        {reproc::stop::wait, reproc::milliseconds(500)},
-        {reproc::stop::terminate, reproc::milliseconds(500)},
-        {reproc::stop::kill, reproc::milliseconds(500)},
-    });
-
-    impl_->running_.store(false, std::memory_order_relaxed);
-
-    // If quit() is called from a callback on the reader thread, joining
-    // would deadlock.  Detach and let the thread finish naturally instead.
+    // Always join or detach, even when running_ was already false because the
+    // engine crashed (the reader thread sets running_=false before calling
+    // on_error_, so the thread may still be joinable after the crash callback).
     if (impl_->reader_thread.joinable()) {
         if (impl_->reader_thread.get_id() == std::this_thread::get_id()) {
             impl_->reader_thread.detach();
