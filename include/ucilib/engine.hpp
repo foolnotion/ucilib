@@ -12,11 +12,13 @@
 #include "ucilib/types.hpp"
 #include "ucilib/ucilib_export.hpp"
 
-namespace uci {
+namespace uci
+{
 
 using milliseconds = std::chrono::milliseconds;
 
-struct go_params {
+struct go_params
+{
     std::optional<int> depth;
     std::optional<int> nodes;
     std::optional<int> mate;
@@ -26,16 +28,17 @@ struct go_params {
     std::optional<milliseconds> winc;
     std::optional<milliseconds> binc;
     std::optional<int> movestogo;
-    bool infinite{};
-    bool ponder{};
+    bool infinite {};
+    bool ponder {};
     std::vector<std::string> searchmoves;
 };
 
 class UCILIB_EXPORT engine
 {
-public:
+  public:
     using info_callback = std::function<void(info const&)>;
     using bestmove_callback = std::function<void(best_move const&)>;
+    using error_callback = std::function<void(std::error_code)>;
 
     engine();
     ~engine() noexcept;
@@ -52,7 +55,7 @@ public:
     auto quit() -> tl::expected<void, std::error_code>;
 
     // UCI protocol
-    auto is_ready(milliseconds timeout = milliseconds{5000})
+    auto is_ready(milliseconds timeout = milliseconds {5000})
         -> tl::expected<void, std::error_code>;
     auto set_option(std::string_view name, std::string_view value = "")
         -> tl::expected<void, std::error_code>;
@@ -72,15 +75,16 @@ public:
     // Callbacks
     void on_info(info_callback cb);
     void on_bestmove(bestmove_callback cb);
+    void on_error(error_callback cb);
 
     // Query
     auto id() const -> engine_id const&;
     auto options() const -> std::vector<option_info> const&;
     auto running() const -> bool;
 
-private:
+  private:
     struct impl;
     std::unique_ptr<impl> impl_;
 };
 
-} // namespace uci
+}  // namespace uci

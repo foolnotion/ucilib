@@ -1,13 +1,15 @@
-#include "detail/parser.hpp"
-
 #include <charconv>
 #include <string>
 #include <string_view>
 #include <vector>
 
-namespace uci::detail {
+#include "detail/parser.hpp"
 
-namespace {
+namespace uci::detail
+{
+
+namespace
+{
 
 // Split a string_view into whitespace-delimited tokens.
 auto tokenize(std::string_view line) -> std::vector<std::string_view>
@@ -33,15 +35,15 @@ auto tokenize(std::string_view line) -> std::vector<std::string_view>
 template<typename T>
 auto parse_number(std::string_view sv) -> std::optional<T>
 {
-    T val{};
+    T val {};
     auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), val);
-    if (ec != std::errc{} || ptr != sv.data() + sv.size()) {
+    if (ec != std::errc {} || ptr != sv.data() + sv.size()) {
         return std::nullopt;
     }
     return val;
 }
 
-} // namespace
+}  // namespace
 
 auto parse_info_line(std::string_view line) -> std::optional<info>
 {
@@ -88,9 +90,7 @@ auto parse_info_line(std::string_view line) -> std::optional<info>
             if (i + 1 < tokens.size() && tokens[i + 1] == "lowerbound") {
                 sc.lower_bound = true;
                 ++i;
-            } else if (i + 1 < tokens.size()
-                       && tokens[i + 1] == "upperbound")
-            {
+            } else if (i + 1 < tokens.size() && tokens[i + 1] == "upperbound") {
                 sc.upper_bound = true;
                 ++i;
             }
@@ -107,8 +107,8 @@ auto parse_info_line(std::string_view line) -> std::optional<info>
             // Everything after "string" is the message.
             ++i;
             if (i < tokens.size()) {
-                auto pos = static_cast<std::size_t>(
-                    tokens[i].data() - line.data());
+                auto pos =
+                    static_cast<std::size_t>(tokens[i].data() - line.data());
                 result.string = std::string(line.substr(pos));
             }
             break;
@@ -184,7 +184,9 @@ auto parse_option(std::string_view line) -> std::optional<option_info>
 
     // Collect consecutive tokens up to the next known attribute keyword.
     // 'default' and 'var' values can legally be multi-word in the UCI spec.
-    auto collect_value = [&](std::size_t start) -> std::pair<std::string, std::size_t> {
+    auto collect_value =
+        [&](std::size_t start) -> std::pair<std::string, std::size_t>
+    {
         std::string val;
         std::size_t j = start;
         while (j < tokens.size()) {
@@ -247,7 +249,7 @@ auto parse_id(std::string_view line)
         value += tokens[i];
     }
 
-    return std::pair{std::move(key), std::move(value)};
+    return std::pair {std::move(key), std::move(value)};
 }
 
-} // namespace uci::detail
+}  // namespace uci::detail
