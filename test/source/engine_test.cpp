@@ -20,14 +20,26 @@ auto engine_path() -> std::string
     return "stockfish";
 }
 
+auto start_engine_or_skip(uci::engine& eng) -> uci::engine_id
+{
+    auto result = eng.start(engine_path());
+    if (!result) {
+        if (std::getenv("UCILIB_ENGINE_PATH") == nullptr) {
+            SKIP("stockfish not available");
+        }
+        REQUIRE(result.has_value());
+        return {};
+    }
+    return *result;
+}
+
 }  // namespace
 
 TEST_CASE("engine start and quit", "[engine]")
 {
     uci::engine eng;
-    auto result = eng.start(engine_path());
-    REQUIRE(result.has_value());
-    CHECK_FALSE(result->name.empty());
+    auto result = start_engine_or_skip(eng);
+    CHECK_FALSE(result.name.empty());
     CHECK(eng.running());
 
     auto quit_result = eng.quit();
@@ -38,8 +50,7 @@ TEST_CASE("engine start and quit", "[engine]")
 TEST_CASE("engine id and options populated after start", "[engine]")
 {
     uci::engine eng;
-    auto result = eng.start(engine_path());
-    REQUIRE(result.has_value());
+    static_cast<void>(start_engine_or_skip(eng));
 
     CHECK_FALSE(eng.id().name.empty());
     CHECK_FALSE(eng.id().author.empty());
@@ -51,7 +62,7 @@ TEST_CASE("engine id and options populated after start", "[engine]")
 TEST_CASE("engine isready", "[engine]")
 {
     uci::engine eng;
-    REQUIRE(eng.start(engine_path()).has_value());
+    static_cast<void>(start_engine_or_skip(eng));
 
     auto ready = eng.is_ready();
     CHECK(ready.has_value());
@@ -62,7 +73,7 @@ TEST_CASE("engine isready", "[engine]")
 TEST_CASE("engine set_option and isready", "[engine]")
 {
     uci::engine eng;
-    REQUIRE(eng.start(engine_path()).has_value());
+    static_cast<void>(start_engine_or_skip(eng));
 
     auto opt_result = eng.set_option("Hash", "32");
     CHECK(opt_result.has_value());
@@ -76,7 +87,7 @@ TEST_CASE("engine set_option and isready", "[engine]")
 TEST_CASE("engine go with depth and callbacks", "[engine]")
 {
     uci::engine eng;
-    REQUIRE(eng.start(engine_path()).has_value());
+    static_cast<void>(start_engine_or_skip(eng));
 
     std::atomic<int> info_count {0};
     std::atomic<bool> got_bestmove {false};
@@ -111,7 +122,7 @@ TEST_CASE("engine go with depth and callbacks", "[engine]")
 TEST_CASE("engine set_position with fen", "[engine]")
 {
     uci::engine eng;
-    REQUIRE(eng.start(engine_path()).has_value());
+    static_cast<void>(start_engine_or_skip(eng));
     REQUIRE(eng.is_ready().has_value());
 
     // Sicilian defense position
@@ -136,7 +147,7 @@ TEST_CASE("engine set_position with fen", "[engine]")
 TEST_CASE("engine multipv", "[engine]")
 {
     uci::engine eng;
-    REQUIRE(eng.start(engine_path()).has_value());
+    static_cast<void>(start_engine_or_skip(eng));
 
     REQUIRE(eng.set_option("MultiPV", "3").has_value());
     REQUIRE(eng.is_ready().has_value());
@@ -176,7 +187,7 @@ TEST_CASE("engine multipv", "[engine]")
 TEST_CASE("engine crash isolation", "[engine]")
 {
     uci::engine eng;
-    REQUIRE(eng.start(engine_path()).has_value());
+    static_cast<void>(start_engine_or_skip(eng));
     REQUIRE(eng.set_position_startpos().has_value());
     REQUIRE(eng.go({.infinite = true}).has_value());
 
@@ -203,7 +214,7 @@ TEST_CASE("engine start with invalid path", "[engine]")
 TEST_CASE("engine stop", "[engine]")
 {
     uci::engine eng;
-    REQUIRE(eng.start(engine_path()).has_value());
+    static_cast<void>(start_engine_or_skip(eng));
     REQUIRE(eng.set_position_startpos().has_value());
 
     REQUIRE(eng.go({.infinite = true}).has_value());

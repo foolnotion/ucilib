@@ -28,7 +28,7 @@ struct info
     std::optional<int> depth;
     std::optional<int> seldepth;
     std::optional<int> multipv;
-    std::optional<score> score;
+    std::optional<struct score> score;
     std::optional<std::int64_t> nodes;
     std::optional<int> nps;
     std::optional<int> time_ms;
