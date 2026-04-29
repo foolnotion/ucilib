@@ -24,8 +24,10 @@ struct engine::impl {
 
     info_callback on_info_;                     // NOLINT(readability-identifier-naming)
     bestmove_callback on_bestmove_;             // NOLINT(readability-identifier-naming)
+    error_callback on_error_;                   // NOLINT(readability-identifier-naming)
 
     std::atomic<bool> running_{false};          // NOLINT(readability-identifier-naming)
+    std::atomic<bool> in_search_{false};        // NOLINT(readability-identifier-naming)
 
     // Synchronization for blocking commands (uci, isready).
     std::mutex sync_mutex;
@@ -104,6 +106,7 @@ struct engine::impl {
         }
 
         if (auto parsed = detail::parse_bestmove(line)) {
+            in_search_.store(false, std::memory_order_relaxed);
             if (on_bestmove_) {
                 try {
                     on_bestmove_(*parsed);
@@ -144,6 +147,12 @@ struct engine::impl {
 
         static_cast<void>(reproc::drain(process, sink, reproc::sink::null)); // NOLINT(bugprone-unused-return-value)
         running_.store(false, std::memory_order_relaxed);
+        if (in_search_.exchange(false, std::memory_order_relaxed) && on_error_) {
+            try {
+                on_error_(make_error_code(errc::engine_crashed));
+            } catch (...) { // NOLINT(bugprone-empty-catch)
+            }
+        }
 
         // Wake up any waiting futures in case the engine died unexpectedly.
         std::lock_guard lock(sync_mutex);
@@ -401,7 +410,11 @@ auto engine::go(go_params const& params)
         }
     }
 
-    return impl_->send(cmd);
+    auto result = impl_->send(cmd);
+    if (result) {
+        impl_->in_search_.store(true, std::memory_order_relaxed);
+    }
+    return result;
 }
 
 auto engine::stop() -> tl::expected<void, std::error_code>
@@ -417,6 +430,11 @@ void engine::on_info(info_callback cb)
 void engine::on_bestmove(bestmove_callback cb)
 {
     impl_->on_bestmove_ = std::move(cb);
+}
+
+void engine::on_error(error_callback cb)
+{
+    impl_->on_error_ = std::move(cb);
 }
 
 auto engine::id() const -> engine_id const&

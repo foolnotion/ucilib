@@ -36,6 +36,7 @@ class UCILIB_EXPORT engine
 public:
     using info_callback = std::function<void(info const&)>;
     using bestmove_callback = std::function<void(best_move const&)>;
+    using error_callback = std::function<void(std::error_code)>;
 
     engine();
     ~engine() noexcept;
@@ -72,6 +73,7 @@ public:
     // Callbacks
     void on_info(info_callback cb);
     void on_bestmove(bestmove_callback cb);
+    void on_error(error_callback cb);
 
     // Query
     auto id() const -> engine_id const&;
