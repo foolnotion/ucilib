@@ -12,9 +12,28 @@
 namespace
 {
 
+auto environment_variable(char const* name) -> std::string
+{
+#ifdef _WIN32
+    char* value = nullptr;
+    std::size_t size = 0;
+    if (_dupenv_s(&value, &size, name) != 0 || value == nullptr) {
+        return {};
+    }
+    std::string result {value};
+    std::free(value);
+    return result;
+#else
+    if (auto const* value = std::getenv(name)) {
+        return value;
+    }
+    return {};
+#endif
+}
+
 auto engine_path() -> std::string
 {
-    if (auto const* env = std::getenv("UCILIB_ENGINE_PATH")) {
+    if (auto env = environment_variable("UCILIB_ENGINE_PATH"); !env.empty()) {
         return env;
     }
     return "stockfish";
@@ -24,7 +43,7 @@ auto start_engine_or_skip(uci::engine& eng) -> uci::engine_id
 {
     auto result = eng.start(engine_path());
     if (!result) {
-        if (std::getenv("UCILIB_ENGINE_PATH") == nullptr) {
+        if (environment_variable("UCILIB_ENGINE_PATH").empty()) {
             SKIP("stockfish not available");
         }
         REQUIRE(result.has_value());
