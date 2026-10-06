@@ -56,6 +56,8 @@ auto start_engine_or_skip(uci::engine& eng) -> uci::engine_id
     return *result;
 }
 
+#ifndef _WIN32
+
 class hanging_uci_engine
 {
   public:
@@ -107,6 +109,7 @@ class hanging_uci_engine
     std::filesystem::path path_;
     std::filesystem::path entered_;
 };
+#endif
 
 }  // namespace
 
@@ -121,6 +124,8 @@ TEST_CASE("engine start and quit", "[engine]")
     CHECK(quit_result.has_value());
     CHECK_FALSE(eng.running());
 }
+
+#ifndef _WIN32
 
 TEST_CASE("engine start cancels a blocked UCI handshake", "[engine]")
 {
@@ -150,6 +155,7 @@ TEST_CASE("engine start cancels a blocked UCI handshake", "[engine]")
           == uci::make_error_code(uci::errc::operation_cancelled));
     CHECK_FALSE(engine.running());
 }
+#endif
 
 TEST_CASE("engine id and options populated after start", "[engine]")
 {

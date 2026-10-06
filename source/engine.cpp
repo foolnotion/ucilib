@@ -192,29 +192,32 @@ struct engine::impl
             sink,
             reproc::sink::null));  // NOLINT(bugprone-unused-return-value)
         running_.store(false, std::memory_order_relaxed);
+
+        // Wake up any waiting futures in case the engine died unexpectedly.
+        {
+            std::lock_guard lock(sync_mutex);
+            if (waiting_uciok_) {
+                waiting_uciok_ = false;
+                try {
+                    uciok_promise.set_exception(std::make_exception_ptr(
+                        std::runtime_error("engine exited before uciok")));
+                } catch (...) {  // NOLINT(bugprone-empty-catch)
+                }
+            }
+            if (waiting_readyok_) {
+                waiting_readyok_ = false;
+                try {
+                    readyok_promise.set_exception(std::make_exception_ptr(
+                        std::runtime_error("engine exited before readyok")));
+                } catch (...) {  // NOLINT(bugprone-empty-catch)
+                }
+            }
+        }
+
         if (in_search_.exchange(false, std::memory_order_relaxed) && on_error_)
         {
             try {
                 on_error_(make_error_code(errc::engine_crashed));
-            } catch (...) {  // NOLINT(bugprone-empty-catch)
-            }
-        }
-
-        // Wake up any waiting futures in case the engine died unexpectedly.
-        std::lock_guard lock(sync_mutex);
-        if (waiting_uciok_) {
-            waiting_uciok_ = false;
-            try {
-                uciok_promise.set_exception(std::make_exception_ptr(
-                    std::runtime_error("engine exited before uciok")));
-            } catch (...) {  // NOLINT(bugprone-empty-catch)
-            }
-        }
-        if (waiting_readyok_) {
-            waiting_readyok_ = false;
-            try {
-                readyok_promise.set_exception(std::make_exception_ptr(
-                    std::runtime_error("engine exited before readyok")));
             } catch (...) {  // NOLINT(bugprone-empty-catch)
             }
         }
