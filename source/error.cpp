@@ -27,7 +27,7 @@ class uci_error_category final : public std::error_category
             case errc::invalid_argument:
                 return "invalid argument";
             case errc::operation_cancelled:
-                return "operation cancelled";
+                return "operation canceled";
         }
         return "unknown uci error";
     }

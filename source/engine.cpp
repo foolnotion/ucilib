@@ -24,7 +24,7 @@ enum class wait_result
 {
     ready,
     timeout,
-    cancelled,
+    canceled,
 };
 
 auto wait_for(std::future<void>& future,
@@ -35,7 +35,7 @@ auto wait_for(std::future<void>& future,
     constexpr auto poll_interval = std::chrono::milliseconds {5};
     for (;;) {
         if (stop_token.stop_requested()) {
-            return wait_result::cancelled;
+            return wait_result::canceled;
         }
         auto const now = std::chrono::steady_clock::now();
         if (now >= deadline) {
@@ -285,7 +285,7 @@ auto engine::start(std::string const& path, std::stop_token const stop_token)
         wait_for(impl_->uciok_future, std::chrono::seconds {10}, stop_token);
     if (status != wait_result::ready) {
         static_cast<void>(quit());
-        if (status == wait_result::cancelled) {
+        if (status == wait_result::canceled) {
             return tl::unexpected(make_error_code(errc::operation_cancelled));
         }
         return tl::unexpected(make_error_code(errc::uci_handshake_timeout));
@@ -352,7 +352,7 @@ auto engine::is_ready(milliseconds const timeout,
 
     auto const status = wait_for(impl_->readyok_future, timeout, stop_token);
     if (status != wait_result::ready) {
-        if (status == wait_result::cancelled) {
+        if (status == wait_result::canceled) {
             static_cast<void>(quit());
             return tl::unexpected(make_error_code(errc::operation_cancelled));
         }
