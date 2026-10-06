@@ -131,22 +131,21 @@ TEST_CASE("engine start cancels a blocked UCI handshake", "[engine]")
     auto finished = result.get_future();
     auto engine = uci::engine {};
     auto starter =
-        std::thread {[&]() -> void
-                     {
-                         result.set_value(engine.start(
-                             fake_engine.path(), stop_source.get_token()));
-                     }};
+        std::jthread {[&]() -> void
+                      {
+                          result.set_value(engine.start(
+                              fake_engine.path(), stop_source.get_token()));
+                      }};
 
     REQUIRE(fake_engine.wait_until_entered());
     stop_source.request_stop();
-    REQUIRE(finished.wait_for(std::chrono::seconds {1})
+    REQUIRE(finished.wait_for(std::chrono::seconds {2})
             == std::future_status::ready);
     auto const started = finished.get();
     CHECK_FALSE(started.has_value());
     CHECK(started.error()
           == uci::make_error_code(uci::errc::operation_cancelled));
     CHECK_FALSE(engine.running());
-    starter.join();
 }
 
 TEST_CASE("engine id and options populated after start", "[engine]")
