@@ -130,12 +130,15 @@ TEST_CASE("engine start cancels a blocked UCI handshake", "[engine]")
         std::promise<tl::expected<uci::engine_id, std::error_code>> {};
     auto finished = result.get_future();
     auto engine = uci::engine {};
-    auto starter =
-        std::jthread {[&]() -> void
-                      {
-                          result.set_value(engine.start(
-                              fake_engine.path(), stop_source.get_token()));
-                      }};
+    auto starter = std::jthread {
+        [&](std::stop_token const thread_stop) -> void
+        {
+            auto cancel_start = std::stop_callback {
+                thread_stop,
+                [&stop_source]() -> void { stop_source.request_stop(); }};
+            result.set_value(
+                engine.start(fake_engine.path(), stop_source.get_token()));
+        }};
 
     REQUIRE(fake_engine.wait_until_entered());
     stop_source.request_stop();
