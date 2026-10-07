@@ -78,6 +78,7 @@ enum class errc : std::uint8_t
     write_failed,
     engine_crashed,
     invalid_argument,
+    operation_cancelled,
 };
 
 auto uci_category() -> std::error_category const&;

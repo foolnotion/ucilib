@@ -1,4 +1,6 @@
+#include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <future>
 #include <mutex>
 #include <string>
@@ -14,6 +16,43 @@
 
 namespace uci
 {
+
+namespace
+{
+
+enum class wait_result
+{
+    ready,
+    timeout,
+    canceled,
+};
+
+auto wait_for(std::future<void>& future,
+              std::chrono::milliseconds const timeout,
+              std::stop_token const stop_token) -> wait_result
+{
+    auto const deadline = std::chrono::steady_clock::now() + timeout;
+    constexpr auto poll_interval = std::chrono::milliseconds {5};
+    for (;;) {
+        if (stop_token.stop_requested()) {
+            return wait_result::canceled;
+        }
+        auto const now = std::chrono::steady_clock::now();
+        if (now >= deadline) {
+            return wait_result::timeout;
+        }
+        if (future.wait_for(std::min(
+                poll_interval,
+                std::chrono::duration_cast<std::chrono::milliseconds>(deadline
+                                                                      - now)))
+            == std::future_status::ready)
+        {
+            return wait_result::ready;
+        }
+    }
+}
+
+}  // namespace
 
 struct engine::impl
 {
@@ -153,29 +192,32 @@ struct engine::impl
             sink,
             reproc::sink::null));  // NOLINT(bugprone-unused-return-value)
         running_.store(false, std::memory_order_relaxed);
+
+        // Wake up any waiting futures in case the engine died unexpectedly.
+        {
+            std::lock_guard lock(sync_mutex);
+            if (waiting_uciok_) {
+                waiting_uciok_ = false;
+                try {
+                    uciok_promise.set_exception(std::make_exception_ptr(
+                        std::runtime_error("engine exited before uciok")));
+                } catch (...) {  // NOLINT(bugprone-empty-catch)
+                }
+            }
+            if (waiting_readyok_) {
+                waiting_readyok_ = false;
+                try {
+                    readyok_promise.set_exception(std::make_exception_ptr(
+                        std::runtime_error("engine exited before readyok")));
+                } catch (...) {  // NOLINT(bugprone-empty-catch)
+                }
+            }
+        }
+
         if (in_search_.exchange(false, std::memory_order_relaxed) && on_error_)
         {
             try {
                 on_error_(make_error_code(errc::engine_crashed));
-            } catch (...) {  // NOLINT(bugprone-empty-catch)
-            }
-        }
-
-        // Wake up any waiting futures in case the engine died unexpectedly.
-        std::lock_guard lock(sync_mutex);
-        if (waiting_uciok_) {
-            waiting_uciok_ = false;
-            try {
-                uciok_promise.set_exception(std::make_exception_ptr(
-                    std::runtime_error("engine exited before uciok")));
-            } catch (...) {  // NOLINT(bugprone-empty-catch)
-            }
-        }
-        if (waiting_readyok_) {
-            waiting_readyok_ = false;
-            try {
-                readyok_promise.set_exception(std::make_exception_ptr(
-                    std::runtime_error("engine exited before readyok")));
             } catch (...) {  // NOLINT(bugprone-empty-catch)
             }
         }
@@ -197,7 +239,7 @@ engine::~engine() noexcept
 engine::engine(engine&&) noexcept = default;
 auto engine::operator=(engine&&) noexcept -> engine& = default;
 
-auto engine::start(std::string const& path)
+auto engine::start(std::string const& path, std::stop_token const stop_token)
     -> tl::expected<engine_id, std::error_code>
 {
     if (impl_->running_.load(std::memory_order_relaxed)) {
@@ -242,11 +284,13 @@ auto engine::start(std::string const& path)
         return tl::unexpected(send_result.error());
     }
 
-    // Wait for uciok with a 10s timeout.
-    auto status = impl_->uciok_future.wait_for(std::chrono::seconds(10));
-    if (status == std::future_status::timeout) {
-        // Kill the engine — it didn't respond.
+    auto const status =
+        wait_for(impl_->uciok_future, std::chrono::seconds {10}, stop_token);
+    if (status != wait_result::ready) {
         static_cast<void>(quit());
+        if (status == wait_result::canceled) {
+            return tl::unexpected(make_error_code(errc::operation_cancelled));
+        }
         return tl::unexpected(make_error_code(errc::uci_handshake_timeout));
     }
 
@@ -289,7 +333,8 @@ auto engine::quit() -> tl::expected<void, std::error_code>
     return {};
 }
 
-auto engine::is_ready(milliseconds timeout)
+auto engine::is_ready(milliseconds const timeout,
+                      std::stop_token const stop_token)
     -> tl::expected<void, std::error_code>
 {
     if (!impl_->running_.load(std::memory_order_relaxed)) {
@@ -308,8 +353,12 @@ auto engine::is_ready(milliseconds timeout)
         return tl::unexpected(send_result.error());
     }
 
-    auto status = impl_->readyok_future.wait_for(timeout);
-    if (status == std::future_status::timeout) {
+    auto const status = wait_for(impl_->readyok_future, timeout, stop_token);
+    if (status != wait_result::ready) {
+        if (status == wait_result::canceled) {
+            static_cast<void>(quit());
+            return tl::unexpected(make_error_code(errc::operation_cancelled));
+        }
         std::lock_guard lock(impl_->sync_mutex);
         impl_->waiting_readyok_ = false;
         return tl::unexpected(make_error_code(errc::ready_timeout));

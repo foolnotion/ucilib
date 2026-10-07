@@ -26,6 +26,8 @@ class uci_error_category final : public std::error_category
                 return "engine process crashed";
             case errc::invalid_argument:
                 return "invalid argument";
+            case errc::operation_cancelled:
+                return "operation canceled";
         }
         return "unknown uci error";
     }

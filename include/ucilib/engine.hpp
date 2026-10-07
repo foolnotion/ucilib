@@ -3,6 +3,7 @@
 #include <chrono>
 #include <functional>
 #include <memory>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -49,13 +50,16 @@ class UCILIB_EXPORT engine
     engine(engine const&) = delete;
     auto operator=(engine const&) -> engine& = delete;
 
-    // Lifecycle
-    auto start(std::string const& path)
+    // Lifecycle. A requested stop terminates the child, joins its reader and
+    // returns errc::operation_cancelled; it never leaves a process behind.
+    auto start(std::string const& path, std::stop_token stop_token = {})
         -> tl::expected<engine_id, std::error_code>;
     auto quit() -> tl::expected<void, std::error_code>;
 
-    // UCI protocol
-    auto is_ready(milliseconds timeout = milliseconds {5000})
+    // UCI protocol. Cancellation has the same process-cleanup contract as
+    // start(), because readiness is part of session setup.
+    auto is_ready(milliseconds timeout = milliseconds {5000},
+                  std::stop_token stop_token = {})
         -> tl::expected<void, std::error_code>;
     auto set_option(std::string_view name, std::string_view value = "")
         -> tl::expected<void, std::error_code>;

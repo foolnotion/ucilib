@@ -1,6 +1,10 @@
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <future>
+#include <stop_token>
 #include <string>
 #include <thread>
 #include <vector>
@@ -52,6 +56,61 @@ auto start_engine_or_skip(uci::engine& eng) -> uci::engine_id
     return *result;
 }
 
+#ifndef _WIN32
+
+class hanging_uci_engine
+{
+  public:
+    hanging_uci_engine()
+        : path_ {std::filesystem::temp_directory_path()
+                 / "ucilib_hanging_uci_engine.sh"}
+        , entered_ {path_.string() + ".entered"}
+    {
+        std::filesystem::remove(entered_);
+        auto script = std::ofstream {path_};
+        script << "#!/usr/bin/env sh\n"
+                  "while IFS= read -r line; do\n"
+                  "  if [ \"$line\" = uci ]; then\n"
+                  "    : > '"
+               << entered_.string()
+               << "'\n"
+                  "  fi\n"
+                  "done\n";
+        script.close();
+        std::filesystem::permissions(path_,
+                                     std::filesystem::perms::owner_read
+                                         | std::filesystem::perms::owner_write
+                                         | std::filesystem::perms::owner_exec);
+    }
+
+    ~hanging_uci_engine()
+    {
+        std::error_code ignored;
+        std::filesystem::remove(path_, ignored);
+        std::filesystem::remove(entered_, ignored);
+    }
+
+    auto wait_until_entered() const -> bool
+    {
+        auto const deadline =
+            std::chrono::steady_clock::now() + std::chrono::seconds {1};
+        while (!std::filesystem::exists(entered_)) {
+            if (std::chrono::steady_clock::now() >= deadline) {
+                return false;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds {5});
+        }
+        return true;
+    }
+
+    auto path() const -> std::string { return path_.string(); }
+
+  private:
+    std::filesystem::path path_;
+    std::filesystem::path entered_;
+};
+#endif
+
 }  // namespace
 
 TEST_CASE("engine start and quit", "[engine]")
@@ -65,6 +124,38 @@ TEST_CASE("engine start and quit", "[engine]")
     CHECK(quit_result.has_value());
     CHECK_FALSE(eng.running());
 }
+
+#ifndef _WIN32
+
+TEST_CASE("engine start cancels a blocked UCI handshake", "[engine]")
+{
+    auto const fake_engine = hanging_uci_engine {};
+    auto stop_source = std::stop_source {};
+    auto result =
+        std::promise<tl::expected<uci::engine_id, std::error_code>> {};
+    auto finished = result.get_future();
+    auto engine = uci::engine {};
+    auto starter = std::jthread {
+        [&](std::stop_token const thread_stop) -> void
+        {
+            auto cancel_start = std::stop_callback {
+                thread_stop,
+                [&stop_source]() -> void { stop_source.request_stop(); }};
+            result.set_value(
+                engine.start(fake_engine.path(), stop_source.get_token()));
+        }};
+
+    REQUIRE(fake_engine.wait_until_entered());
+    stop_source.request_stop();
+    REQUIRE(finished.wait_for(std::chrono::seconds {2})
+            == std::future_status::ready);
+    auto const started = finished.get();
+    CHECK_FALSE(started.has_value());
+    CHECK(started.error()
+          == uci::make_error_code(uci::errc::operation_cancelled));
+    CHECK_FALSE(engine.running());
+}
+#endif
 
 TEST_CASE("engine id and options populated after start", "[engine]")
 {
